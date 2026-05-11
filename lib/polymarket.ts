@@ -275,9 +275,10 @@ export interface SharpScore {
 }
 
 export interface SharpEntry {
-  trader:   LeaderboardEntry
-  sharp:    SharpScore
-  posCount: number
+  trader:    LeaderboardEntry
+  sharp:     SharpScore
+  posCount:  number
+  positions: Position[]
 }
 
 /** Compute Sharp Score from a trader's current open positions.
@@ -330,7 +331,7 @@ export async function getSharpLeaderboard(
     const positions = allPositions[i].status === 'fulfilled' ? allPositions[i].value : []
     const sharp = computeSharpScore(positions)
     if (sharp) {
-      qualified.push({ trader, sharp, posCount: positions.length })
+      qualified.push({ trader, sharp, posCount: positions.length, positions })
     } else {
       rising.push(trader)
     }
@@ -340,34 +341,29 @@ export async function getSharpLeaderboard(
   return { qualified, rising }
 }
 
-// ── "Hot right now": open positions of top traders, aggregated by market
-export async function getHotMarkets(topN = 20, timeWindow: Window = 'all'): Promise<{
+// ── "Hot right now": aggregate positions from sharp-ranked entries into markets
+// Pure function — no API calls. Pass the slice of SharpEntry[] you want to aggregate.
+export function buildHotMarkets(entries: SharpEntry[]): {
   slug:       string
   title:      string
   icon:       string | null
   traders:    number
   totalValue: number
   avgPrice:   number
-}[]> {
-  const leaders = await getLeaderboard(timeWindow, topN, 'profit')
-  const allPositions = await Promise.allSettled(
-    leaders.map(l => getPositions(l.proxyWallet))
-  )
-
+}[] {
   const bySlug: Record<string, {
     title: string; icon: string | null
     traders: Set<string>; totalValue: number; prices: number[]
   }> = {}
 
-  allPositions.forEach((result, i) => {
-    if (result.status !== 'fulfilled') return
-    result.value.forEach(pos => {
+  entries.forEach(({ trader, positions }) => {
+    positions.forEach(pos => {
       const key = pos.slug
       if (!key) return
       if (!bySlug[key]) {
         bySlug[key] = { title: pos.title, icon: pos.icon, traders: new Set(), totalValue: 0, prices: [] }
       }
-      bySlug[key].traders.add(leaders[i].proxyWallet)
+      bySlug[key].traders.add(trader.proxyWallet)
       bySlug[key].totalValue += pos.currentValue
       bySlug[key].prices.push(pos.curPrice)
     })

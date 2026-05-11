@@ -1,4 +1,4 @@
-import { getHotMarkets, fmt$, type Window } from '@/lib/polymarket'
+import { getSharpLeaderboard, buildHotMarkets, fmt$, type Window } from '@/lib/polymarket'
 
 export const revalidate = 120
 
@@ -24,11 +24,12 @@ export default async function HotPage({ searchParams }: Props) {
     ? searchParams.window
     : 'all') as Window
 
-  let markets: Awaited<ReturnType<typeof getHotMarkets>> = []
+  let markets: ReturnType<typeof buildHotMarkets> = []
   let error: string | null = null
 
   try {
-    markets = await getHotMarkets(n, timeWin)
+    const { qualified } = await getSharpLeaderboard(timeWin, 300)
+    markets = buildHotMarkets(qualified.slice(0, n))
   } catch (e) {
     error = e instanceof Error ? e.message : 'Failed to fetch data'
   }
