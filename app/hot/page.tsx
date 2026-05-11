@@ -37,7 +37,7 @@ export default async function HotPage({ searchParams }: Props) {
     <>
       <div className="page-header">
         <h1>Hot right now</h1>
-        <p>Markets the top {n} wallets ({windowLabel[timeWin].toLowerCase()} profit) are currently holding</p>
+        <p>Markets the top {n} sharpest traders ({windowLabel[timeWin].toLowerCase()}) are currently holding</p>
       </div>
 
       {/* Filters */}
@@ -114,8 +114,8 @@ export default async function HotPage({ searchParams }: Props) {
       <div style={{ marginTop: '2rem', padding: '1rem', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)' }}>
         <div className="section-title" style={{ marginBottom: '8px' }}>How this works</div>
         <p style={{ fontSize: '12px', color: 'var(--muted)', fontFamily: 'var(--font-mono)', lineHeight: '1.7' }}>
-          We fetch the current open positions of the top {n} wallets ranked by {windowLabel[timeWin].toLowerCase()} profit,
-          then aggregate by market. Markets held by more top traders appear higher.
+          We fetch the current open positions of the top {n} sharpest traders ({windowLabel[timeWin].toLowerCase()}),
+          then aggregate by market. Markets held by more of them appear higher.
           This is not investment advice — it shows where sharp capital is concentrated,
           not necessarily where it should be.
         </p>

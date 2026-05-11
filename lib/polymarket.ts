@@ -84,7 +84,9 @@ function shortAddr(addr: string) {
 }
 
 export function displayName(entry: { name?: string | null; pseudonym?: string | null; proxyWallet: string }) {
-  return entry.name || entry.pseudonym || shortAddr(entry.proxyWallet)
+  const raw = entry.name || entry.pseudonym
+  if (!raw || raw.length > 20) return shortAddr(entry.proxyWallet)
+  return raw
 }
 
 export function fmt$(n: number) {

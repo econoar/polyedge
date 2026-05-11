@@ -659,16 +659,19 @@ footer {
 
 /* ── Theme toggle ── */
 .theme-toggle {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 30px;
+  gap: 5px;
+  padding: 0 10px;
   height: 30px;
   background: none;
   border: 1px solid var(--border2);
   border-radius: var(--radius);
   color: var(--muted);
   cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
   transition: color 0.15s, border-color 0.15s;
   flex-shrink: 0;
 }
