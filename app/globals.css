@@ -1032,6 +1032,149 @@ footer {
   white-space: nowrap;
 }
 
+/* ── Sharp Score badge (leaderboard table) ── */
+.sharp-badge {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius);
+  flex-shrink: 0;
+}
+
+.sharp-badge-num {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.sharp-badge-sub {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  margin-top: 2px;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.sharp-high { background: rgba(0,229,160,0.1);  color: var(--green); border: 1px solid rgba(0,229,160,0.25); }
+.sharp-mid  { background: rgba(245,166,35,0.1); color: var(--amber); border: 1px solid rgba(245,166,35,0.25); }
+.sharp-low  { background: rgba(90,112,128,0.1); color: var(--muted); border: 1px solid var(--border2); }
+
+/* ── Sharp Score hero (trader profile) ── */
+.sharp-hero {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2rem;
+  align-items: start;
+}
+
+.sharp-score-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 100px;
+}
+
+.sharp-score-num {
+  font-family: var(--font-mono);
+  font-size: 72px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.sharp-score-denom {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.sharp-score-note {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted2);
+  margin-top: 8px;
+}
+
+.sharp-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.sharp-bar-row {
+  display: grid;
+  grid-template-columns: 148px 1fr 36px;
+  align-items: center;
+  gap: 12px;
+}
+
+.sharp-bar-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.sharp-bar-track {
+  height: 5px;
+  background: var(--bg3);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.sharp-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: var(--accent);
+}
+
+.sharp-bar-val {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+}
+
+/* ── Rising section divider ── */
+.rising-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 2.5rem 0 1rem;
+}
+
+.rising-divider-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.rising-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+@media (max-width: 680px) {
+  .sharp-hero { grid-template-columns: 1fr; gap: 1.5rem; }
+  .sharp-score-num { font-size: 56px; }
+  .sharp-bar-row { grid-template-columns: 120px 1fr 32px; }
+}
+
 /* ── Utilities ── */
 a { color: inherit; }
 .text-accent { color: var(--accent); }

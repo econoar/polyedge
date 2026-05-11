@@ -3,8 +3,8 @@ import './globals.css'
 import ThemeToggle from './ThemeToggle'
 
 export const metadata: Metadata = {
-  title: 'PolyEdge — Polymarket Trader Leaderboard',
-  description: 'Track the sharpest traders on Polymarket. On-chain verified PnL, open positions, and real-time leaderboards.',
+  title: 'PolyEdge — Sharp Score Leaderboard',
+  description: 'PnL shows who got lucky. Sharp Score shows who actually knows. Track the sharpest Polymarket traders with on-chain verified data.',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -21,7 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <nav>
           <a href="/" className="logo">POLYEDGE</a>
           <div className="nav-links">
-            <a href="/leaderboard">Leaderboard</a>
+            <a href="/leaderboard">Sharp List</a>
             <a href="/hot">Hot Now</a>
             <a href="/watchlist">Watchlist</a>
             <ThemeToggle />

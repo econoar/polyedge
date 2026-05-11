@@ -1,8 +1,9 @@
 import Link from 'next/link'
-import { getProfile, getPositions, getActivity, displayName, fmt$, fmtPct } from '@/lib/polymarket'
+import { getProfile, getPositions, getActivity, computeSharpScore, displayName, fmt$, fmtPct } from '@/lib/polymarket'
 import { notFound } from 'next/navigation'
 import WatchButton from '@/app/components/WatchButton'
 import PnlChart from './PnlChart'
+import SharpBreakdown from './SharpBreakdown'
 
 export const revalidate = 60
 
@@ -48,13 +49,15 @@ export default async function TraderPage({ params }: Props) {
   const act = activity.status  === 'fulfilled' ? activity.value  : []
   const name = displayName(p)
 
+  const sharp = computeSharpScore(pos)
+
   // Position accuracy: % of open positions currently profitable
   const profitablePos = pos.filter(px => px.cashPnl > 0).length
   const posAccuracy   = pos.length > 0 ? (profitablePos / pos.length) * 100 : null
 
   return (
     <>
-      <Link href="/leaderboard" className="back">← Leaderboard</Link>
+      <Link href="/leaderboard" className="back">← Sharp List</Link>
 
       {/* Profile header */}
       <div className="profile-header">
@@ -87,6 +90,16 @@ export default async function TraderPage({ params }: Props) {
           <div className="verified-badge" style={{ marginTop: '8px' }}>✓ on-chain verified · Polygon</div>
         </div>
       </div>
+
+      {/* Sharp Score hero */}
+      {sharp ? (
+        <SharpBreakdown sharp={sharp} posCount={pos.length} />
+      ) : (
+        <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '1.25rem 1.5rem', marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px' }}>Sharp Score</div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--muted2)' }}>Not enough open positions to compute — check back when this trader has active positions.</div>
+        </div>
+      )}
 
       {/* Stat cards */}
       <div className="stat-grid">

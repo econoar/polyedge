@@ -259,6 +259,82 @@ export async function getMarketHolders(eventSlug: string, topN = 50): Promise<Ar
   return holders.sort((a, b) => b.position.currentValue - a.position.currentValue)
 }
 
+// ── Sharp Score ───────────────────────────────────────────────────────────────
+
+export interface SharpScore {
+  total:              number  // 0–100
+  entryTiming:        number  // 0–25  how well they entered before price moved
+  contrarianAccuracy: number  // 0–25  low-prob entries that are winning
+  repeatability:      number  // 0–25  win rate weighted by breadth
+  stakeSizing:        number  // 0–25  bigger bets on better outcomes
+}
+
+export interface SharpEntry {
+  trader:   LeaderboardEntry
+  sharp:    SharpScore
+  posCount: number
+}
+
+/** Compute Sharp Score from a trader's current open positions.
+ *  Returns null when there aren't enough positions to be meaningful (< 2). */
+export function computeSharpScore(positions: Position[]): SharpScore | null {
+  if (positions.length < 2) return null
+
+  // 1. Entry Timing — reward entering before the market moved in your favor
+  const timingValues = positions.map(p =>
+    Math.max(p.curPrice - p.avgPrice, 0) / (p.avgPrice || 0.01)
+  )
+  const avgTiming = timingValues.reduce((a, b) => a + b, 0) / timingValues.length
+  const entryTiming = Math.round(Math.min(avgTiming / 0.5, 1) * 25)
+
+  // 2. Contrarian Accuracy — low-probability entries (<45¢) that are currently profitable
+  const contrarian = positions.filter(p => p.avgPrice < 0.45)
+  const contrarianAccuracy = contrarian.length === 0
+    ? 12  // neutral score when no contrarian positions
+    : Math.round((contrarian.filter(p => p.cashPnl > 0).length / contrarian.length) * 25)
+
+  // 3. Repeatability — win rate weighted by number of markets (rewards breadth)
+  const winRate = positions.filter(p => p.cashPnl > 0).length / positions.length
+  const breadthFactor = Math.min(positions.length / 8, 1)
+  const repeatability = Math.round(winRate * breadthFactor * 25)
+
+  // 4. Stake Sizing — are the bigger bets the winning bets?
+  const sorted = [...positions].sort((a, b) => b.initialValue - a.initialValue)
+  const mid = Math.ceil(sorted.length / 2)
+  const bigWinRate  = sorted.slice(0, mid).filter(p => p.cashPnl > 0).length / Math.max(mid, 1)
+  const smallWinRate = sorted.slice(mid).filter(p => p.cashPnl > 0).length / Math.max(sorted.length - mid, 1)
+  const stakeSizing = Math.round(((bigWinRate - smallWinRate + 1) / 2) * 25)
+
+  const total = entryTiming + contrarianAccuracy + repeatability + stakeSizing
+  return { total, entryTiming, contrarianAccuracy, repeatability, stakeSizing }
+}
+
+/** Fetch the top `poolSize` traders by profit, score them all, return sorted by Sharp Score.
+ *  Traders with < 2 open positions go into `rising` (not enough data). */
+export async function getSharpLeaderboard(
+  timeWindow: Window = 'all',
+  poolSize = 100,
+): Promise<{ qualified: SharpEntry[]; rising: LeaderboardEntry[] }> {
+  const leaders = await getLeaderboard(timeWindow, poolSize, 'profit')
+  const allPositions = await Promise.allSettled(leaders.map(l => getPositions(l.proxyWallet)))
+
+  const qualified: SharpEntry[] = []
+  const rising:    LeaderboardEntry[] = []
+
+  leaders.forEach((trader, i) => {
+    const positions = allPositions[i].status === 'fulfilled' ? allPositions[i].value : []
+    const sharp = computeSharpScore(positions)
+    if (sharp) {
+      qualified.push({ trader, sharp, posCount: positions.length })
+    } else {
+      rising.push(trader)
+    }
+  })
+
+  qualified.sort((a, b) => b.sharp.total - a.sharp.total)
+  return { qualified, rising }
+}
+
 // ── "Hot right now": open positions of top traders, aggregated by market
 export async function getHotMarkets(topN = 20, timeWindow: Window = 'all'): Promise<{
   slug:       string
