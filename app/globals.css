@@ -1035,6 +1035,36 @@ footer {
   white-space: nowrap;
 }
 
+.outcome-toggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  background: none;
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.outcome-toggle:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Small Sharp Score badge — inline next to trader name */
+.sharp-badge-sm {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
 /* ── Sharp Score badge (leaderboard table) ── */
 .sharp-badge {
   display: inline-flex;

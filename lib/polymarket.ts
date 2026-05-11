@@ -244,19 +244,22 @@ export async function getMarket(slug: string) {
 }
 
 // Top traders currently holding a specific market (by eventSlug)
+// Sharp score is computed for free — positions are already fetched here.
 export async function getMarketHolders(eventSlug: string, topN = 50): Promise<Array<{
   trader:   LeaderboardEntry
   position: Position
+  sharp:    SharpScore | null
 }>> {
   const leaders = await getLeaderboard('all', topN, 'profit')
   const allPositions = await Promise.allSettled(
     leaders.map(l => getPositions(l.proxyWallet))
   )
-  const holders: Array<{ trader: LeaderboardEntry; position: Position }> = []
+  const holders: Array<{ trader: LeaderboardEntry; position: Position; sharp: SharpScore | null }> = []
   allPositions.forEach((result, i) => {
     if (result.status !== 'fulfilled') return
-    const pos = result.value.find(p => p.slug === eventSlug)
-    if (pos) holders.push({ trader: leaders[i], position: pos })
+    const positions = result.value
+    const pos = positions.find(p => p.slug === eventSlug)
+    if (pos) holders.push({ trader: leaders[i], position: pos, sharp: computeSharpScore(positions) })
   })
   return holders.sort((a, b) => b.position.currentValue - a.position.currentValue)
 }
