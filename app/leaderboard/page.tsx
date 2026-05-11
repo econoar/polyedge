@@ -24,7 +24,7 @@ export default async function LeaderboardPage({ searchParams }: Props) {
 
   try {
     if (sort === 'sharp') {
-      sharpData = await getSharpLeaderboard(timeWin, 100)
+      sharpData = await getSharpLeaderboard(timeWin, 300)
     } else {
       entries = await getLeaderboard(timeWin, 50, sort)
     }

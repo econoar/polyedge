@@ -18,7 +18,7 @@ type Props = { searchParams: { n?: string; window?: string } }
 export default async function HotPage({ searchParams }: Props) {
   const n = (VALID_N.includes(Number(searchParams.n) as ValidN)
     ? Number(searchParams.n)
-    : 20) as ValidN
+    : 50) as ValidN
 
   const timeWin = (VALID_WINDOWS.includes(searchParams.window as any)
     ? searchParams.window

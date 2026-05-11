@@ -12,7 +12,7 @@ function badgeClass(score: number) {
 export default async function Home() {
   let topSharp: Awaited<ReturnType<typeof getSharpLeaderboard>>['qualified'] = []
   try {
-    const { qualified } = await getSharpLeaderboard('all', 100)
+    const { qualified } = await getSharpLeaderboard('all', 300)
     topSharp = qualified.slice(0, 5)
   } catch {}
 
