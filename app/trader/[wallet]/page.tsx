@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { getProfile, getPositions, getActivityPaginated, getRedeemsPaginated, computeSharpScore, buildClosedTrades, displayName, fmt$, fmtPct } from '@/lib/polymarket'
+import { getProfile, getPositions, getActivityCached, getRedeemsCached, computeSharpScore, buildClosedTrades, displayName, fmt$, fmtPct } from '@/lib/polymarket'
 import { analyzeBotLikelihood } from '@/lib/botDetection'
 import { notFound } from 'next/navigation'
 import WatchButton from '@/app/components/WatchButton'
@@ -27,8 +27,8 @@ export default async function TraderPage({ params }: Props) {
   const [profile, positions, activity, redeems] = await Promise.allSettled([
     getProfile(wallet),
     getPositions(wallet),
-    getActivityPaginated(wallet, 1000),
-    getRedeemsPaginated(wallet, 300),
+    getActivityCached(wallet),
+    getRedeemsCached(wallet),
   ])
 
   if (profile.status === 'rejected') {
