@@ -1,7 +1,8 @@
 import {
-  getLeaderboard, getSharpLeaderboard,
-  type Window, type LeaderboardEntry, type SharpEntry,
+  getLeaderboard, getSharpLeaderboard, getActivityForBot,
+  type Window, type LeaderboardEntry, type SharpEntry, type BotAnalysis,
 } from '@/lib/polymarket'
+import { analyzeBotLikelihood } from '@/lib/botDetection'
 import LeaderboardTable from './LeaderboardTable'
 import SharpLeaderboardTable from './SharpLeaderboardTable'
 import SearchBar from './SearchBar'
@@ -19,14 +20,24 @@ export default async function LeaderboardPage({ searchParams }: Props) {
     ? searchParams.sort : 'sharp') as Sort
 
   let sharpData: { qualified: SharpEntry[]; rising: LeaderboardEntry[] } | null = null
-  let entries: LeaderboardEntry[] = []
-  let error: string | null = null
+  let entries:   LeaderboardEntry[] = []
+  let botMap:    Record<string, BotAnalysis> = {}
+  let error:     string | null = null
 
   try {
     if (sort === 'sharp') {
       sharpData = await getSharpLeaderboard(timeWin, 300)
     } else {
       entries = await getLeaderboard(timeWin, 50, sort)
+
+      // Run bot detection for Profit/Volume tabs so badges show there too
+      const allActivity = await Promise.allSettled(
+        entries.map(e => getActivityForBot(e.proxyWallet))
+      )
+      entries.forEach((e, i) => {
+        const trades = allActivity[i].status === 'fulfilled' ? allActivity[i].value : []
+        botMap[e.proxyWallet] = analyzeBotLikelihood(trades, e.profit, e.volume)
+      })
     }
   } catch (e) {
     error = e instanceof Error ? e.message : 'Failed to fetch'
@@ -104,7 +115,7 @@ export default async function LeaderboardPage({ searchParams }: Props) {
           {entries.length === 0 && !error && (
             <div className="empty">No data available for this window.</div>
           )}
-          {entries.length > 0 && <LeaderboardTable entries={entries} />}
+          {entries.length > 0 && <LeaderboardTable entries={entries} botMap={botMap} />}
         </>
       )}
     </>

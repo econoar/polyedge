@@ -56,12 +56,12 @@ export default async function MarketPage({ params }: Props) {
 
       {/* Top trader holders */}
       <div className="section-title" style={{ marginTop: '2rem' }}>
-        Top traders holding this market ({traders.length})
+        Sharps holding this market ({traders.length})
       </div>
 
       {traders.length === 0 ? (
         <div className="empty" style={{ padding: '3rem 0' }}>
-          None of the top 50 traders currently hold a position here.
+          None of the top 50 sharps currently hold a position here.
         </div>
       ) : (
         <MarketHoldersTable holders={traders} />

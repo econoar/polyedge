@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { type SharpEntry, displayName, fmt$ } from '@/lib/polymarket'
+import HumanBadge from '@/app/components/HumanBadge'
 
 interface Props {
   entries: SharpEntry[]
@@ -25,7 +26,7 @@ export default function SharpLeaderboardTable({ entries }: Props) {
           <th>Trader</th>
           <th className="right">Sharp Score</th>
           <th className="right">Win Rate</th>
-          <th className="right">Positions</th>
+          <th className="right">Resolved</th>
           <th className="right">P&amp;L</th>
         </tr>
       </thead>
@@ -33,9 +34,7 @@ export default function SharpLeaderboardTable({ entries }: Props) {
         {entries.map((e, i) => {
           const name     = displayName(e.trader)
           const initials = name.slice(0, 2).toUpperCase()
-          const winRate  = e.posCount > 0
-            ? Math.round((e.sharp.repeatability / 25) * (Math.min(e.posCount, 8) / 8) * 100)
-            : 0
+          const winRate  = Math.round(e.sharp.winRate * 100)
 
           return (
             <tr
@@ -56,7 +55,10 @@ export default function SharpLeaderboardTable({ entries }: Props) {
                     )}
                     <div>
                       <div className="trader-name">{name}</div>
-                      <div className="trader-addr">{e.trader.proxyWallet.slice(0, 6)}…{e.trader.proxyWallet.slice(-4)}</div>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
+                        <div className="trader-addr">{e.trader.proxyWallet.slice(0, 6)}…{e.trader.proxyWallet.slice(-4)}</div>
+                        <HumanBadge confidence={e.botAnalysis.humanConfidence} showLabel={false} />
+                      </div>
                     </div>
                   </div>
                 </Link>
@@ -73,7 +75,7 @@ export default function SharpLeaderboardTable({ entries }: Props) {
                 {winRate}%
               </td>
               <td className="right mono" style={{ color: 'var(--muted2)', fontSize: '12px' }}>
-                {e.posCount}
+                {e.sharp.resolvedCount}
               </td>
               <td className={`right ${e.trader.profit >= 0 ? 'pos' : 'neg'}`}>
                 {fmt$(e.trader.profit)}

@@ -95,7 +95,7 @@ export default async function Home() {
           {[
             { title: 'Sharp List',      desc: 'Traders ranked by Sharp Score — a composite of timing, accuracy, consistency, and sizing', href: '/leaderboard' },
             { title: 'Trader profiles', desc: 'Full score breakdown, open positions, PnL chart, and trade history per wallet', href: '/leaderboard' },
-            { title: 'Hot right now',   desc: 'Markets the top profitable wallets are currently holding — follow the smart money', href: '/hot' },
+            { title: 'Hot right now',   desc: 'Markets the sharpest traders are currently holding — follow where sharp capital is concentrated', href: '/hot' },
           ].map(f => (
             <Link key={f.title} href={f.href} style={{ textDecoration: 'none' }}>
               <div className="stat-card" style={{ cursor: 'pointer', transition: 'border-color 0.15s', borderColor: 'var(--border)' }}>

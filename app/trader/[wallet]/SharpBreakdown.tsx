@@ -12,14 +12,17 @@ function scoreColor(score: number) {
 }
 
 const COMPONENTS = [
-  { key: 'entryTiming',        label: 'Entry Timing',        tip: 'Entered before the market moved in their favor' },
-  { key: 'contrarianAccuracy', label: 'Contrarian Accuracy', tip: 'Low-probability bets (<45¢) that are currently winning' },
-  { key: 'repeatability',      label: 'Repeatability',       tip: 'Win rate across multiple markets' },
-  { key: 'stakeSizing',        label: 'Stake Sizing',        tip: 'Bigger positions are the better-performing ones' },
+  { key: 'entryTiming',        label: 'Entry Timing',        tip: 'Entered before the market moved in their favor — across open positions and closed trade history' },
+  { key: 'contrarianAccuracy', label: 'Contrarian Accuracy', tip: 'Low-probability bets (<45¢) that paid off — open and resolved' },
+  { key: 'repeatability',      label: 'Repeatability',       tip: 'Win rate weighted by number of distinct markets traded' },
+  { key: 'stakeSizing',        label: 'Stake Sizing',        tip: 'Bigger bets are the better-performing ones' },
 ] as const
 
 export default function SharpBreakdown({ sharp, posCount }: Props) {
   const color = scoreColor(sharp.total)
+  const note = sharp.resolvedCount > 0
+    ? `${posCount} open · ${sharp.resolvedCount} resolved`
+    : `${posCount} open position${posCount !== 1 ? 's' : ''}`
 
   return (
     <div className="sharp-hero">
@@ -27,7 +30,7 @@ export default function SharpBreakdown({ sharp, posCount }: Props) {
         <div className="section-title" style={{ border: 'none', padding: 0, marginBottom: '8px' }}>Sharp Score</div>
         <div className="sharp-score-num" style={{ color }}>{sharp.total}</div>
         <div className="sharp-score-denom">out of 100</div>
-        <div className="sharp-score-note">{posCount} open position{posCount !== 1 ? 's' : ''}</div>
+        <div className="sharp-score-note">{note}</div>
       </div>
 
       <div className="sharp-bars">

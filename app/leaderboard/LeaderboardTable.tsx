@@ -2,13 +2,15 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { type LeaderboardEntry, displayName, fmt$, fmtPct } from '@/lib/polymarket'
+import { type LeaderboardEntry, type BotAnalysis, displayName, fmt$, fmtPct } from '@/lib/polymarket'
+import HumanBadge from '@/app/components/HumanBadge'
 
 interface Props {
-  entries: LeaderboardEntry[]
+  entries:    LeaderboardEntry[]
+  botMap?:    Record<string, BotAnalysis>
 }
 
-export default function LeaderboardTable({ entries }: Props) {
+export default function LeaderboardTable({ entries, botMap }: Props) {
   const router = useRouter()
 
   return (
@@ -25,10 +27,11 @@ export default function LeaderboardTable({ entries }: Props) {
       </thead>
       <tbody>
         {entries.map((e, i) => {
-          const name    = displayName(e)
+          const name     = displayName(e)
           const initials = name.slice(0, 2).toUpperCase()
           const pnlClass = e.profit >= 0 ? 'pos' : 'neg'
           const roiClass = e.percentPnl >= 0 ? 'pos' : 'neg'
+          const bot      = botMap?.[e.proxyWallet]
 
           return (
             <tr
@@ -49,7 +52,10 @@ export default function LeaderboardTable({ entries }: Props) {
                     )}
                     <div>
                       <div className="trader-name">{name}</div>
-                      <div className="trader-addr">{e.proxyWallet.slice(0, 6)}…{e.proxyWallet.slice(-4)}</div>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
+                        <div className="trader-addr">{e.proxyWallet.slice(0, 6)}…{e.proxyWallet.slice(-4)}</div>
+                        {bot && <HumanBadge confidence={bot.humanConfidence} showLabel={false} />}
+                      </div>
                     </div>
                   </div>
                 </Link>

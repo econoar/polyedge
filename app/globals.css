@@ -1226,3 +1226,33 @@ a { color: inherit; }
   .home-lb-avatar { display: none; }
   .search-input { width: 180px; }
 }
+
+/* ── Human confidence badges ─────────────────────────────────────────────── */
+.human-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 99px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.human-verified {
+  background: rgba(74, 222, 128, 0.10);
+  color: var(--green);
+  border: 1px solid rgba(74, 222, 128, 0.22);
+}
+.human-unverified {
+  background: rgba(251, 191, 36, 0.10);
+  color: #f59e0b;
+  border: 1px solid rgba(251, 191, 36, 0.22);
+}
+.human-bot {
+  background: rgba(239, 68, 68, 0.10);
+  color: var(--red);
+  border: 1px solid rgba(239, 68, 68, 0.22);
+}

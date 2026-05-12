@@ -1,6 +1,9 @@
 // lib/polymarket.ts
 // All Polymarket API calls. No auth needed for read endpoints.
 
+import { analyzeBotLikelihood, type BotAnalysis } from './botDetection'
+export type { BotAnalysis } from './botDetection'
+
 const GAMMA = 'https://gamma-api.polymarket.com'
 const DATA  = 'https://data-api.polymarket.com'
 
@@ -101,8 +104,7 @@ export function fmtPct(n: number) {
 
 // ── API calls ────────────────────────────────────────────────────────────────
 
-// Actual endpoint: DATA/v1/leaderboard
-// Fields: rank, proxyWallet, userName, xUsername, verifiedBadge, vol, pnl, profileImage
+// Single leaderboard page — used by Profit/Volume tabs and internally by getLeaderboardByRoi.
 export async function getLeaderboard(
   timeWindow: Window = 'all',
   limit  = 50,
@@ -111,25 +113,68 @@ export async function getLeaderboard(
   const params = new URLSearchParams({
     timePeriod: timePeriodMap[timeWindow],
     orderBy:    sortBy === 'volume' ? 'VOL' : 'PNL',
-    limit:      String(limit),
+    limit:      String(Math.min(limit, 50)),  // API hard cap is 50
     offset:     '0',
     category:   'overall',
   })
   const raw = await get<any[]>(`${DATA}/v1/leaderboard?${params}`)
-  return raw.map(r => {
-    const pnl = Number(r.pnl ?? 0)
-    const vol = Number(r.vol ?? 0)
-    return {
-      proxyWallet:   r.proxyWallet,
-      name:          r.userName  || null,
-      pseudonym:     null,
-      profileImage:  r.profileImage || null,
-      profit:        pnl,
-      volume:        vol,
-      percentPnl:    vol > 0 ? (pnl / vol) * 100 : 0,
-      marketsTraded: 0,
+  return raw.map(r => mapLeaderboardRow(r))
+}
+
+function mapLeaderboardRow(r: any): LeaderboardEntry {
+  const pnl = Number(r.pnl ?? 0)
+  const vol = Number(r.vol ?? 0)
+  return {
+    proxyWallet:   r.proxyWallet,
+    name:          r.userName  || null,
+    pseudonym:     null,
+    profileImage:  r.profileImage || null,
+    profit:        pnl,
+    volume:        vol,
+    percentPnl:    vol > 0 ? (pnl / vol) * 100 : 0,
+    marketsTraded: 0,
+  }
+}
+
+// Fetch up to `candidatePool` traders by volume (paginated), re-rank by ROI.
+// The leaderboard API caps at ~10,000 unique traders (all with ≥$1.6M volume);
+// pages repeat after that so deduplication handles any overshoot safely.
+export async function getLeaderboardByRoi(
+  timeWindow: Window = 'all',
+  candidatePool = 10_000,
+): Promise<LeaderboardEntry[]> {
+  const pageCount = Math.ceil(candidatePool / 50)
+
+  const pages = await Promise.allSettled(
+    Array.from({ length: pageCount }, (_, i) => {
+      const params = new URLSearchParams({
+        timePeriod: timePeriodMap[timeWindow],
+        orderBy:    'VOL',
+        limit:      '50',
+        offset:     String(i * 50),
+        category:   'overall',
+      })
+      return get<any[]>(`${DATA}/v1/leaderboard?${params}`)
+    })
+  )
+
+  const seen = new Set<string>()
+  const all: LeaderboardEntry[] = []
+
+  for (const page of pages) {
+    if (page.status !== 'fulfilled') continue
+    for (const r of page.value) {
+      if (seen.has(r.proxyWallet)) continue
+      seen.add(r.proxyWallet)
+      const entry = mapLeaderboardRow(r)
+      if (entry.volume < 500) continue   // $500 USDC floor
+      all.push(entry)
     }
-  })
+  }
+
+  // Re-rank by ROI — surfaces skill, not capital
+  all.sort((a, b) => b.percentPnl - a.percentPnl)
+  return all
 }
 
 // Profile: leaderboard user filter (stats) + user-stats (trade count)
@@ -215,6 +260,45 @@ export async function getActivity(wallet: string, limit = 30): Promise<Activity[
   }))
 }
 
+// Fetches more trades for bot detection — silently returns [] on error.
+export async function getActivityForBot(wallet: string): Promise<Activity[]> {
+  try {
+    return await getActivity(wallet, 100)
+  } catch {
+    return []
+  }
+}
+
+// Redeem events: market resolutions where this trader held the winning side.
+// Each REDEEM means they won — sellPrice is always $1.00/share.
+interface Redeem {
+  proxyWallet: string
+  slug:        string
+  title:       string
+  usdcSize:    number
+  timestamp:   number
+}
+
+export async function getRedeems(wallet: string, limit = 50): Promise<Redeem[]> {
+  try {
+    const params = new URLSearchParams({
+      user:  wallet,
+      limit: String(limit),
+      type:  'REDEEM',
+    })
+    const raw = await get<any[]>(`${DATA}/activity?${params}`)
+    return raw.map(r => ({
+      proxyWallet: wallet,
+      slug:        r.eventSlug ?? r.slug ?? '',
+      title:       r.title     ?? '',
+      usdcSize:    Number(r.usdcSize ?? 0),
+      timestamp:   parseInt(r.timestamp ?? 0, 10),
+    }))
+  } catch {
+    return []
+  }
+}
+
 // ── PnL history ──────────────────────────────────────────────────────────────
 
 const PNL_API = 'https://user-pnl-api.polymarket.com'
@@ -268,73 +352,184 @@ export async function getMarketHolders(eventSlug: string, topN = 50): Promise<Ar
 
 export interface SharpScore {
   total:              number  // 0–100
-  entryTiming:        number  // 0–25  how well they entered before price moved
-  contrarianAccuracy: number  // 0–25  low-prob entries that are winning
-  repeatability:      number  // 0–25  win rate weighted by breadth
-  stakeSizing:        number  // 0–25  bigger bets on better outcomes
+  entryTiming:        number  // 0–25
+  contrarianAccuracy: number  // 0–25
+  repeatability:      number  // 0–25
+  stakeSizing:        number  // 0–25
+  resolvedCount:      number  // closed round-trips used in computation
+  winRate:            number  // 0–1, from resolved trips + open positions
 }
 
 export interface SharpEntry {
-  trader:    LeaderboardEntry
-  sharp:     SharpScore
-  posCount:  number
-  positions: Position[]
+  trader:      LeaderboardEntry
+  sharp:       SharpScore
+  posCount:    number
+  positions:   Position[]
+  botAnalysis: BotAnalysis
 }
 
-/** Compute Sharp Score from a trader's current open positions.
- *  Returns null when there aren't enough positions to be meaningful (< 2). */
-export function computeSharpScore(positions: Position[]): SharpScore | null {
-  if (positions.length < 2) return null
+interface RoundTrip {
+  slug:      string
+  buyPrice:  number
+  sellPrice: number
+  buyUsdc:   number
+  won:       boolean
+}
 
-  // 1. Entry Timing — reward entering before the market moved in your favor
-  const timingValues = positions.map(p =>
-    Math.max(p.curPrice - p.avgPrice, 0) / (p.avgPrice || 0.01)
-  )
-  const avgTiming = timingValues.reduce((a, b) => a + b, 0) / timingValues.length
-  const entryTiming = Math.round(Math.min(avgTiming / 0.5, 1) * 25)
+function matchRoundTrips(trades: Activity[], redeems: Redeem[] = []): RoundTrip[] {
+  const sorted = [...trades].sort((a, b) => a.timestamp - b.timestamp)
+  const queues: Record<string, Array<{ price: number; usdc: number }>> = {}
+  const trips: RoundTrip[] = []
 
-  // 2. Contrarian Accuracy — low-probability entries (<45¢) that are currently profitable
-  const contrarian = positions.filter(p => p.avgPrice < 0.45)
-  const contrarianAccuracy = contrarian.length === 0
-    ? 12  // neutral score when no contrarian positions
-    : Math.round((contrarian.filter(p => p.cashPnl > 0).length / contrarian.length) * 25)
+  // BUY→SELL pairs from trade activity
+  for (const t of sorted) {
+    if (t.price <= 0) continue
+    const key = `${t.slug}::${t.outcome}`
+    if (t.side === 'BUY') {
+      if (!queues[key]) queues[key] = []
+      queues[key].push({ price: t.price, usdc: t.usdcSize })
+    } else if (t.side === 'SELL' && queues[key]?.length) {
+      const buy = queues[key].shift()!
+      trips.push({ slug: t.slug, buyPrice: buy.price, sellPrice: t.price, buyUsdc: buy.usdc, won: t.price > buy.price })
+    }
+  }
 
-  // 3. Repeatability — win rate weighted by number of markets (rewards breadth)
-  const winRate = positions.filter(p => p.cashPnl > 0).length / positions.length
-  const breadthFactor = Math.min(positions.length / 8, 1)
+  // BUY→REDEEM: market resolved with this trader on the winning side (sellPrice = $1.00 always).
+  // Build slug→buys index for matching, then attribute each REDEEM to the prior buys in that market.
+  const buysBySlug: Record<string, Array<{ price: number; usdc: number; timestamp: number }>> = {}
+  for (const t of sorted) {
+    if (t.side === 'BUY' && t.price > 0) {
+      if (!buysBySlug[t.slug]) buysBySlug[t.slug] = []
+      buysBySlug[t.slug].push({ price: t.price, usdc: t.usdcSize, timestamp: t.timestamp })
+    }
+  }
+
+  const redeemedSlugs = new Set<string>()
+  for (const r of redeems) {
+    if (!r.slug || redeemedSlugs.has(r.slug)) continue  // one trip per market
+    const priorBuys = (buysBySlug[r.slug] ?? []).filter(b => b.timestamp < r.timestamp)
+    if (priorBuys.length === 0) continue
+    redeemedSlugs.add(r.slug)
+    const avgBuyPrice  = priorBuys.reduce((s, b) => s + b.price, 0) / priorBuys.length
+    const totalBuyUsdc = priorBuys.reduce((s, b) => s + b.usdc,  0)
+    trips.push({ slug: r.slug, buyPrice: avgBuyPrice, sellPrice: 1.0, buyUsdc: totalBuyUsdc, won: true })
+  }
+
+  return trips
+}
+
+/** Compute Sharp Score from open positions + closed trade history (BUY→SELL pairs and market resolutions).
+ *  Requires ≥2 open positions OR ≥5 closed round-trips to score. */
+export function computeSharpScore(
+  positions: Position[],
+  trades: Activity[] = [],
+  redeems: Redeem[] = [],
+): SharpScore | null {
+  const trips = matchRoundTrips(trades, redeems)
+  if (positions.length < 2 && trips.length < 3) return null
+
+  // 1. Entry Timing — entered before the market moved in your favor
+  //    Combines: unrealised gain on open positions + price appreciation on closed trades.
+  //    Threshold lowered to 0.25 (25% avg appreciation = full marks).
+  const timingValues = [
+    ...positions.map(p => Math.max(p.curPrice - p.avgPrice, 0) / (p.avgPrice || 0.01)),
+    ...trips.map(t => Math.max(t.sellPrice - t.buyPrice, 0) / (t.buyPrice || 0.01)),
+  ]
+  const avgTiming = timingValues.length > 0
+    ? timingValues.reduce((a, b) => a + b, 0) / timingValues.length : 0
+  const entryTiming = Math.round(Math.min(avgTiming / 0.25, 1) * 25)
+
+  // 2. Contrarian Accuracy — low-prob entries (<45¢) that paid off
+  const contrarianAll = [
+    ...positions.filter(p => p.avgPrice < 0.45).map(p => p.cashPnl > 0),
+    ...trips.filter(t => t.buyPrice < 0.45).map(t => t.won),
+  ]
+  const contrarianAccuracy = contrarianAll.length === 0
+    ? 12
+    : Math.round((contrarianAll.filter(Boolean).length / contrarianAll.length) * 25)
+
+  // 3. Repeatability — win rate across breadth of unique markets
+  //    Breadth divisor 10: needs trades across 10 distinct markets for full credit.
+  const allOutcomes = [
+    ...positions.map(p => p.cashPnl > 0),
+    ...trips.map(t => t.won),
+  ]
+  const winRate = allOutcomes.length > 0
+    ? allOutcomes.filter(Boolean).length / allOutcomes.length : 0
+  const uniqueMarkets = new Set([
+    ...positions.map(p => p.slug),
+    ...trips.map(t => t.slug),
+  ].filter(Boolean)).size
+  const breadthFactor = Math.min(uniqueMarkets / 10, 1)
   const repeatability = Math.round(winRate * breadthFactor * 25)
 
-  // 4. Stake Sizing — are the bigger bets the winning bets?
-  const sorted = [...positions].sort((a, b) => b.initialValue - a.initialValue)
-  const mid = Math.ceil(sorted.length / 2)
-  const bigWinRate  = sorted.slice(0, mid).filter(p => p.cashPnl > 0).length / Math.max(mid, 1)
-  const smallWinRate = sorted.slice(mid).filter(p => p.cashPnl > 0).length / Math.max(sorted.length - mid, 1)
-  const stakeSizing = Math.round(((bigWinRate - smallWinRate + 1) / 2) * 25)
+  // 4. Stake Sizing — bigger bets on better outcomes
+  const allSized = [
+    ...positions.map(p => ({ size: p.initialValue, won: p.cashPnl > 0 })),
+    ...trips.map(t => ({ size: t.buyUsdc, won: t.won })),
+  ].filter(s => s.size > 0)
+  let stakeSizing = 13  // neutral default when insufficient data
+  if (allSized.length >= 4) {
+    const bySizeDesc = [...allSized].sort((a, b) => b.size - a.size)
+    const mid = Math.ceil(bySizeDesc.length / 2)
+    const bigWR   = bySizeDesc.slice(0, mid).filter(s => s.won).length / Math.max(mid, 1)
+    const smallWR = bySizeDesc.slice(mid).filter(s => s.won).length / Math.max(bySizeDesc.length - mid, 1)
+    stakeSizing = Math.round(((bigWR - smallWR + 1) / 2) * 25)
+  }
 
   const total = entryTiming + contrarianAccuracy + repeatability + stakeSizing
-  return { total, entryTiming, contrarianAccuracy, repeatability, stakeSizing }
+  return { total, entryTiming, contrarianAccuracy, repeatability, stakeSizing, resolvedCount: trips.length, winRate }
 }
 
-/** Fetch the top `poolSize` traders by profit, score them all, return sorted by Sharp Score.
- *  Traders with < 2 open positions go into `rising` (not enough data). */
+/** Build the Sharp List.
+ *  Pool: top 1000 by volume, re-ranked by ROI — surfaces skill, not capital.
+ *  Hard filters: bot exclusions, $500 vol floor, ≥10 unique markets traded.
+ *  `poolSize` controls how many ROI-ranked candidates get the expensive analysis. */
 export async function getSharpLeaderboard(
   timeWindow: Window = 'all',
-  poolSize = 100,
+  poolSize = 300,
 ): Promise<{ qualified: SharpEntry[]; rising: LeaderboardEntry[] }> {
-  const leaders = await getLeaderboard(timeWindow, poolSize, 'profit')
-  const allPositions = await Promise.allSettled(leaders.map(l => getPositions(l.proxyWallet)))
+  // Candidate pool: all ~10,000 accessible traders by volume, re-ranked by ROI.
+  // Deduplication in getLeaderboardByRoi handles the API's hard cap safely.
+  const allCandidates = await getLeaderboardByRoi(timeWindow, 10_000)
+  const leaders = allCandidates.slice(0, poolSize)
+
+  // Fetch positions, trade activity, and redeem history in parallel — same wall-clock time.
+  const [allPositions, allActivity, allRedeems] = await Promise.all([
+    Promise.allSettled(leaders.map(l => getPositions(l.proxyWallet))),
+    Promise.allSettled(leaders.map(l => getActivityForBot(l.proxyWallet))),
+    Promise.allSettled(leaders.map(l => getRedeems(l.proxyWallet, 50))),
+  ])
 
   const qualified: SharpEntry[] = []
   const rising:    LeaderboardEntry[] = []
 
   leaders.forEach((trader, i) => {
     const positions = allPositions[i].status === 'fulfilled' ? allPositions[i].value : []
-    const sharp = computeSharpScore(positions)
-    if (sharp) {
-      qualified.push({ trader, sharp, posCount: positions.length, positions })
-    } else {
+    const trades    = allActivity[i].status  === 'fulfilled' ? allActivity[i].value  : []
+    const redeems   = allRedeems[i].status   === 'fulfilled' ? allRedeems[i].value   : []
+
+    // Minimum market breadth: ≥5 unique markets across trades and redeems.
+    const tradeSlugs  = trades.map(t => t.slug).filter(Boolean)
+    const redeemSlugs = redeems.map(r => r.slug).filter(Boolean)
+    const uniqueMarkets = new Set([...tradeSlugs, ...redeemSlugs])
+    if (trades.length > 0 && uniqueMarkets.size < 5) return
+
+    const sharp       = computeSharpScore(positions, trades, redeems)
+    const botAnalysis = analyzeBotLikelihood(trades, trader.profit, trader.volume, positions)
+
+    if (!sharp) {
       rising.push(trader)
+      return
     }
+
+    if (botAnalysis.isDefiniteBot) return  // excluded from Sharp List; still on Profit/Volume
+
+    const effectiveSharp = botAnalysis.scoreMultiplier < 1
+      ? { ...sharp, total: Math.round(sharp.total * botAnalysis.scoreMultiplier) }
+      : sharp
+
+    qualified.push({ trader, sharp: effectiveSharp, posCount: positions.length, positions, botAnalysis })
   })
 
   qualified.sort((a, b) => b.sharp.total - a.sharp.total)

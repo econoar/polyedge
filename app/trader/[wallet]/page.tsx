@@ -1,7 +1,9 @@
 import Link from 'next/link'
-import { getProfile, getPositions, getActivity, computeSharpScore, displayName, fmt$, fmtPct } from '@/lib/polymarket'
+import { getProfile, getPositions, getActivity, getRedeems, computeSharpScore, displayName, fmt$, fmtPct } from '@/lib/polymarket'
+import { analyzeBotLikelihood } from '@/lib/botDetection'
 import { notFound } from 'next/navigation'
 import WatchButton from '@/app/components/WatchButton'
+import HumanBadge from '@/app/components/HumanBadge'
 import PnlChart from './PnlChart'
 import SharpBreakdown from './SharpBreakdown'
 
@@ -29,16 +31,17 @@ export default async function TraderPage({ params }: Props) {
 
   if (!/^0x[a-fA-F0-9]{40}$/.test(wallet)) notFound()
 
-  const [profile, positions, activity] = await Promise.allSettled([
+  const [profile, positions, activity, redeems] = await Promise.allSettled([
     getProfile(wallet),
     getPositions(wallet),
-    getActivity(wallet, 30),
+    getActivity(wallet, 100),
+    getRedeems(wallet, 50),
   ])
 
   if (profile.status === 'rejected') {
     return (
       <div>
-        <Link href="/leaderboard" className="back">← Leaderboard</Link>
+        <Link href="/leaderboard" className="back">← Sharp List</Link>
         <div className="error-box">Could not load trader: {String(profile.reason)}</div>
       </div>
     )
@@ -47,9 +50,11 @@ export default async function TraderPage({ params }: Props) {
   const p   = profile.value
   const pos = positions.status === 'fulfilled' ? positions.value : []
   const act = activity.status  === 'fulfilled' ? activity.value  : []
+  const rdm = redeems.status   === 'fulfilled' ? redeems.value   : []
   const name = displayName(p)
 
-  const sharp = computeSharpScore(pos)
+  const sharp       = computeSharpScore(pos, act, rdm)
+  const botAnalysis = analyzeBotLikelihood(act, p.profit, p.volume, pos)
 
   // Position accuracy: % of open positions currently profitable
   const profitablePos = pos.filter(px => px.cashPnl > 0).length
@@ -87,7 +92,16 @@ export default async function TraderPage({ params }: Props) {
               </a>
             </div>
           </div>
-          <div className="verified-badge" style={{ marginTop: '8px' }}>✓ on-chain verified · Polygon</div>
+          <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <div className="verified-badge">✓ on-chain verified · Polygon</div>
+              <HumanBadge confidence={botAnalysis.humanConfidence} />
+            </div>
+            {(botAnalysis.exclusionReasons.length > 0 || botAnalysis.suspicionFlags.length > 0) && (
+              <div style={{ marginTop: '6px', fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--muted)', lineHeight: '1.6' }}>
+                {botAnalysis.exclusionReasons.map(r => <div key={r}>✕ {r}</div>)}
+                {botAnalysis.suspicionFlags.map(f => <div key={f}>⚑ {f}</div>)}
+              </div>
+            )}
         </div>
       </div>
 

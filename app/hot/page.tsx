@@ -95,7 +95,7 @@ export default async function HotPage({ searchParams }: Props) {
               <div className="hot-title">{m.title}</div>
               <div className="hot-traders-count">
                 <span className="hot-traders-num">{m.traders}</span>
-                <span className="hot-traders-label"> of {n} top traders holding</span>
+                <span className="hot-traders-label"> of {n} sharps holding</span>
               </div>
               <div className="hot-exposure">{fmt$(m.totalValue)} exposure</div>
             </div>

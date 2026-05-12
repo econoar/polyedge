@@ -85,7 +85,7 @@ export default function WatchlistPage() {
           <div>You're not watching any traders yet.</div>
           <div style={{ marginTop: '8px' }}>
             <Link href="/leaderboard" style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>
-              Browse the leaderboard →
+              Browse the Sharp List →
             </Link>
           </div>
         </div>
