@@ -592,7 +592,8 @@ export function buildClosedTrades(
     if (r.slug && !redeemBySlug[r.slug]) redeemBySlug[r.slug] = r
   }
 
-  const openSlugs = new Set(positions.map(p => p.slug))
+  // Only exclude positions that still have value — zero-value positions are resolved losses
+  const openSlugs = new Set(positions.filter(p => p.currentValue > 0).map(p => p.slug))
 
   const closed: ClosedTrade[] = []
   const allSlugs = Array.from(new Set([...Object.keys(bySlug), ...Object.keys(redeemBySlug)]))

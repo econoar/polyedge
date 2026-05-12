@@ -46,13 +46,16 @@ export default async function TraderPage({ params }: Props) {
   const rdm = redeems.status   === 'fulfilled' ? redeems.value   : []
   const name = displayName(p)
 
-  const sharp        = computeSharpScore(pos, act, rdm)
-  const botAnalysis  = analyzeBotLikelihood(act, p.profit, p.volume, pos)
+  // Filter out zero-value positions (resolved against trader but stuck in positions API)
+  const livePos = pos.filter(px => px.currentValue > 0)
+
+  const sharp        = computeSharpScore(livePos, act, rdm)
+  const botAnalysis  = analyzeBotLikelihood(act, p.profit, p.volume, livePos)
   const closedTrades = buildClosedTrades(act, rdm, pos)
 
-  // Position accuracy: % of open positions currently profitable
-  const profitablePos = pos.filter(px => px.cashPnl > 0).length
-  const posAccuracy   = pos.length > 0 ? (profitablePos / pos.length) * 100 : null
+  // Position accuracy: % of live open positions currently profitable
+  const profitablePos = livePos.filter(px => px.cashPnl > 0).length
+  const posAccuracy   = livePos.length > 0 ? (profitablePos / livePos.length) * 100 : null
 
   return (
     <>
@@ -101,7 +104,7 @@ export default async function TraderPage({ params }: Props) {
 
       {/* Sharp Score hero */}
       {sharp ? (
-        <SharpBreakdown sharp={sharp} posCount={pos.length} />
+        <SharpBreakdown sharp={sharp} posCount={livePos.length} />
       ) : (
         <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '1.25rem 1.5rem', marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px' }}>Sharp Score</div>
@@ -132,7 +135,7 @@ export default async function TraderPage({ params }: Props) {
       {/* PnL chart */}
       <PnlChart wallet={wallet} />
 
-      <TraderTabs closedTrades={closedTrades} positions={pos} activity={act} totalProfit={p.profit} />
+      <TraderTabs closedTrades={closedTrades} positions={livePos} activity={act} totalProfit={p.profit} />
     </>
   )
 }
