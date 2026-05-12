@@ -481,6 +481,23 @@ export function computeSharpScore(
   return { total, entryTiming, contrarianAccuracy, repeatability, stakeSizing, resolvedCount: trips.length, winRate }
 }
 
+/** Lightweight homepage preview — positions-only scoring, no trade history fetch.
+ *  ~50x faster than getSharpLeaderboard. Scores are approximate (open positions only). */
+export async function getSharpPreview(n = 5): Promise<Array<{ trader: LeaderboardEntry; sharp: SharpScore }>> {
+  const leaders = await getLeaderboard('all', 50, 'profit')
+  const allPositions = await Promise.allSettled(leaders.map(l => getPositions(l.proxyWallet)))
+
+  const results: Array<{ trader: LeaderboardEntry; sharp: SharpScore }> = []
+  leaders.forEach((trader, i) => {
+    const positions = allPositions[i].status === 'fulfilled' ? allPositions[i].value : []
+    const sharp = computeSharpScore(positions)
+    if (sharp) results.push({ trader, sharp })
+  })
+
+  results.sort((a, b) => b.sharp.total - a.sharp.total)
+  return results.slice(0, n)
+}
+
 /** Build the Sharp List.
  *  Pool: top 1000 by volume, re-ranked by ROI — surfaces skill, not capital.
  *  Hard filters: bot exclusions, $500 vol floor, ≥10 unique markets traded.

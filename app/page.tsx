@@ -1,7 +1,7 @@
 import Link from 'next/link'
-import { getSharpLeaderboard, displayName, fmt$ } from '@/lib/polymarket'
+import { getSharpPreview, displayName, fmt$ } from '@/lib/polymarket'
 
-export const revalidate = 60
+export const revalidate = 300
 
 function badgeClass(score: number) {
   if (score >= 70) return 'sharp-high'
@@ -10,10 +10,9 @@ function badgeClass(score: number) {
 }
 
 export default async function Home() {
-  let topSharp: Awaited<ReturnType<typeof getSharpLeaderboard>>['qualified'] = []
+  let topSharp: Awaited<ReturnType<typeof getSharpPreview>> = []
   try {
-    const { qualified } = await getSharpLeaderboard('all', 300)
-    topSharp = qualified.slice(0, 5)
+    topSharp = await getSharpPreview(5)
   } catch {}
 
   return (

@@ -26,7 +26,8 @@ export default async function LeaderboardPage({ searchParams }: Props) {
 
   try {
     if (sort === 'sharp') {
-      sharpData = await getSharpLeaderboard(timeWin, 300)
+      // Sharp Score is a career metric — always scored all-time regardless of window param.
+      sharpData = await getSharpLeaderboard('all', 300)
     } else {
       entries = await getLeaderboard(timeWin, 50, sort)
 
@@ -51,9 +52,9 @@ export default async function LeaderboardPage({ searchParams }: Props) {
   ]
 
   const subtitleMap: Record<Sort, string> = {
-    sharp:  'Ranked by Sharp Score — quality over quantity',
-    profit: 'Ranked by total profit',
-    volume: 'Ranked by trading volume',
+    sharp:  'Ranked by Sharp Score — quality over quantity · all time',
+    profit: `Ranked by total profit · ${timeWin === 'all' ? 'all time' : timeWin}`,
+    volume: `Ranked by trading volume · ${timeWin === 'all' ? 'all time' : timeWin}`,
   }
 
   return (
@@ -72,15 +73,21 @@ export default async function LeaderboardPage({ searchParams }: Props) {
           <a href={`/leaderboard?window=${timeWin}&sort=profit`} className={`tab ${sort === 'profit' ? 'active' : ''}`}>Profit</a>
           <a href={`/leaderboard?window=${timeWin}&sort=volume`} className={`tab ${sort === 'volume' ? 'active' : ''}`}>Volume</a>
         </div>
-        <div className="tabs" style={{ marginBottom: 0, borderBottom: 'none' }}>
-          {windows.map(w => (
-            <a
-              key={w.key}
-              href={`/leaderboard?window=${w.key}&sort=${sort}`}
-              className={`tab ${timeWin === w.key ? 'active' : ''}`}
-            >{w.label}</a>
-          ))}
-        </div>
+        {sort !== 'sharp' ? (
+          <div className="tabs" style={{ marginBottom: 0, borderBottom: 'none' }}>
+            {windows.map(w => (
+              <a
+                key={w.key}
+                href={`/leaderboard?window=${w.key}&sort=${sort}`}
+                className={`tab ${timeWin === w.key ? 'active' : ''}`}
+              >{w.label}</a>
+            ))}
+          </div>
+        ) : (
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--muted)', letterSpacing: '0.05em' }}>
+            Sharp Score is a career metric — time filters don't apply
+          </div>
+        )}
       </div>
 
       {error && <div className="error-box">⚠ {error}</div>}
@@ -100,7 +107,7 @@ export default async function LeaderboardPage({ searchParams }: Props) {
             <>
               <div className="rising-divider">
                 <div className="rising-divider-line" />
-                <span className="rising-label">Rising — not enough open positions to score</span>
+                <span className="rising-label">Rising — not enough data to score yet</span>
                 <div className="rising-divider-line" />
               </div>
               <LeaderboardTable entries={sharpData.rising} />

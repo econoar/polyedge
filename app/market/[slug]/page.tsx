@@ -26,7 +26,7 @@ export default async function MarketPage({ params }: Props) {
 
   return (
     <>
-      <Link href="/hot" className="back">← Hot right now</Link>
+      <Link href="/hot" className="back">← Back</Link>
 
       {/* Market header */}
       <div className="market-header">

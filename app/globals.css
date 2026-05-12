@@ -683,6 +683,7 @@ footer {
   display: flex;
   gap: 6px;
   align-items: center;
+  position: relative;
 }
 
 .search-input {

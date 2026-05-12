@@ -111,7 +111,7 @@ export default async function TraderPage({ params }: Props) {
       ) : (
         <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '1.25rem 1.5rem', marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px' }}>Sharp Score</div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--muted2)' }}>Not enough open positions to compute — check back when this trader has active positions.</div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--muted2)' }}>Not enough data to compute — needs 2+ open positions or 3+ closed round-trips.</div>
         </div>
       )}
 
