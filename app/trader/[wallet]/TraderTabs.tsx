@@ -17,10 +17,12 @@ export default function TraderTabs({
   closedTrades,
   positions,
   activity,
+  totalProfit,
 }: {
   closedTrades: ClosedTrade[]
   positions:    Position[]
   activity:     Activity[]
+  totalProfit:  number
 }) {
   const [tab, setTab] = useState<Tab>('wins')
 
@@ -44,10 +46,50 @@ export default function TraderTabs({
         </button>
       </div>
 
-      {(tab === 'wins' || tab === 'losses') && (() => {
-        const rows = tab === 'wins' ? wins : losses
+      {tab === 'losses' && (() => {
+        const trackedLoss   = losses.reduce((s, t) => s + t.profit, 0)
+        const trackedWin    = wins.reduce((s, t) => s + t.profit, 0)
+        const impliedLoss   = totalProfit - trackedWin - trackedLoss
+        return (
+          <>
+            <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '10px 14px', marginBottom: '1rem', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--muted)', lineHeight: 1.6 }}>
+              When a position expires worthless (held YES, market resolved NO), Polymarket emits no activity event — the shares silently disappear.
+              Only early-exit losses (BUY→SELL below entry) are visible here.
+              {impliedLoss < -500 && (
+                <span style={{ display: 'block', marginTop: 4, color: 'var(--red)' }}>
+                  Implied untracked losses: {fmt$(impliedLoss)} (total P&L minus tracked wins/losses)
+                </span>
+              )}
+            </div>
+            {losses.length === 0 ? (
+              <p style={{ color: 'var(--muted)', fontSize: '13px' }}>No early-exit losses found in tracked history.</p>
+            ) : (
+              <div className="pos-list">
+                {losses.map((w, i) => (
+                  <a key={i} href={`https://polymarket.com/event/${w.slug}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+                    <div className="pos-card">
+                      {w.icon ? <img src={w.icon} alt="" className="pos-icon" /> : <div className="pos-icon-ph" />}
+                      <div>
+                        <div className="pos-title">{w.title}</div>
+                        <div className="pos-meta">{w.outcome} · {(w.buyPrice * 100).toFixed(0)}¢ → {(w.sellPrice * 100).toFixed(0)}¢</div>
+                      </div>
+                      <div className="pos-right">
+                        <div className="pos-pnl neg">{fmt$(w.profit)}</div>
+                        <div className="pos-val" style={{ color: 'var(--red)' }}>{(w.roi * 100).toFixed(0)}% ROI</div>
+                      </div>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )}
+          </>
+        )
+      })()}
+
+      {tab === 'wins' && (() => {
+        const rows = wins
         return rows.length === 0 ? (
-          <p style={{ color: 'var(--muted)', fontSize: '13px' }}>No {tab === 'wins' ? 'winning' : 'losing'} closed trades found.</p>
+          <p style={{ color: 'var(--muted)', fontSize: '13px' }}>No winning closed trades found.</p>
         ) : (
           <div className="pos-list">
             {rows.map((w, i) => (

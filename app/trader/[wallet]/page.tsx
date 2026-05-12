@@ -132,7 +132,7 @@ export default async function TraderPage({ params }: Props) {
       {/* PnL chart */}
       <PnlChart wallet={wallet} />
 
-      <TraderTabs closedTrades={closedTrades} positions={pos} activity={act} />
+      <TraderTabs closedTrades={closedTrades} positions={pos} activity={act} totalProfit={p.profit} />
     </>
   )
 }
