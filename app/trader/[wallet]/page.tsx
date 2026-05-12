@@ -48,7 +48,7 @@ export default async function TraderPage({ params }: Props) {
 
   const sharp        = computeSharpScore(pos, act, rdm)
   const botAnalysis  = analyzeBotLikelihood(act, p.profit, p.volume, pos)
-  const closedTrades = buildClosedTrades(act, rdm)
+  const closedTrades = buildClosedTrades(act, rdm, pos)
 
   // Position accuracy: % of open positions currently profitable
   const profitablePos = pos.filter(px => px.cashPnl > 0).length

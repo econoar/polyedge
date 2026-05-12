@@ -104,7 +104,8 @@ export default function TraderTabs({
                   <div>
                     <div className="pos-title">{w.title}</div>
                     <div className="pos-meta">
-                      {w.outcome} · {(w.buyPrice * 100).toFixed(0)}¢ → {w.sellPrice >= 0.99 ? '$1 resolved' : `${(w.sellPrice * 100).toFixed(0)}¢`}
+                      {w.outcome} · {(w.buyPrice * 100).toFixed(0)}¢ →{' '}
+                      {w.exitType === 'redeem' ? '$1 resolved' : w.exitType === 'expired' ? 'expired worthless' : `${(w.sellPrice * 100).toFixed(0)}¢`}
                     </div>
                   </div>
                   <div className="pos-right">

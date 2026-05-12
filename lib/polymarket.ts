@@ -549,75 +549,85 @@ export interface ClosedTrade {
   title:     string
   icon:      string | null
   outcome:   string
-  buyPrice:  number
-  sellPrice: number
+  buyPrice:  number   // weighted avg entry price
+  sellPrice: number   // weighted avg exit price (1.0 = resolved, 0 = expired worthless)
   profit:    number   // USDC gain (negative = loss)
   roi:       number   // fractional return (negative = loss)
+  exitType:  'redeem' | 'sell' | 'expired'
 }
 
-/** Match BUY→SELL and BUY→REDEEM round-trips, sorted by profit descending (wins first, losses last). */
-export function buildClosedTrades(trades: Activity[], redeems: Redeem[] = []): ClosedTrade[] {
-  const sorted = [...trades].sort((a, b) => a.timestamp - b.timestamp)
+/**
+ * Slug-level cash flow analysis — far more accurate than individual pair matching.
+ * Groups all BUYs/SELLs/REDEEMs per market, computes net profit = total out - total in.
+ * Handles multi-buy/single-sell, partial exits, and expired-worthless positions correctly.
+ * Pass current `positions` so still-open markets are excluded.
+ */
+export function buildClosedTrades(
+  trades:    Activity[],
+  redeems:   Redeem[]   = [],
+  positions: Position[] = [],
+): ClosedTrade[] {
+  // Aggregate per slug
+  interface SlugData {
+    totalIn:  number
+    totalOut: number
+    buyWtSum: number   // sum of (price * usdc) for weighted avg
+    sellWtSum: number
+    title:    string
+    icon:     string | null
+    outcome:  string
+  }
+  const bySlug: Record<string, SlugData> = {}
 
-  // icon/outcome lookup keyed by slug::outcome
-  const meta: Record<string, { title: string; icon: string | null; outcome: string }> = {}
-  for (const t of sorted) {
-    const k = `${t.slug}::${t.outcome}`
-    if (t.slug && !meta[k]) meta[k] = { title: t.title, icon: t.icon, outcome: t.outcome }
+  for (const t of trades) {
+    if (!t.slug || t.price <= 0) continue
+    if (!bySlug[t.slug]) bySlug[t.slug] = { totalIn: 0, totalOut: 0, buyWtSum: 0, sellWtSum: 0, title: t.title, icon: t.icon, outcome: t.outcome }
+    const d = bySlug[t.slug]
+    if (t.side === 'BUY')  { d.totalIn  += t.usdcSize; d.buyWtSum  += t.price * t.usdcSize }
+    if (t.side === 'SELL') { d.totalOut += t.usdcSize; d.sellWtSum += t.price * t.usdcSize }
   }
 
-  const queues: Record<string, Array<{ price: number; usdc: number }>> = {}
-  const closed: ClosedTrade[] = []
-
-  // BUY→SELL pairs (include wins and losses)
-  for (const t of sorted) {
-    if (t.price <= 0) continue
-    const key = `${t.slug}::${t.outcome}`
-    if (t.side === 'BUY') {
-      if (!queues[key]) queues[key] = []
-      queues[key].push({ price: t.price, usdc: t.usdcSize })
-    } else if (t.side === 'SELL' && queues[key]?.length) {
-      const buy = queues[key].shift()!
-      closed.push({
-        slug:      t.slug,
-        title:     t.title,
-        icon:      t.icon,
-        outcome:   t.outcome,
-        buyPrice:  buy.price,
-        sellPrice: t.price,
-        profit:    (t.price - buy.price) / buy.price * buy.usdc,
-        roi:       (t.price - buy.price) / buy.price,
-      })
-    }
-  }
-
-  // BUY→REDEEM (market resolved YES for this trader — always a win)
-  const buysBySlug: Record<string, Array<{ price: number; usdc: number; timestamp: number }>> = {}
-  for (const t of sorted) {
-    if (t.side === 'BUY' && t.price > 0) {
-      if (!buysBySlug[t.slug]) buysBySlug[t.slug] = []
-      buysBySlug[t.slug].push({ price: t.price, usdc: t.usdcSize, timestamp: t.timestamp })
-    }
-  }
-
-  const redeemedSlugs = new Set<string>()
+  const redeemBySlug: Record<string, Redeem> = {}
   for (const r of redeems) {
-    if (!r.slug || redeemedSlugs.has(r.slug)) continue
-    const priorBuys = (buysBySlug[r.slug] ?? []).filter(b => b.timestamp < r.timestamp)
-    if (priorBuys.length === 0) continue
-    redeemedSlugs.add(r.slug)
-    const avgBuyPrice  = priorBuys.reduce((s, b) => s + b.price, 0) / priorBuys.length
-    const totalBuyUsdc = priorBuys.reduce((s, b) => s + b.usdc, 0)
-    const metaKey = Object.keys(meta).find(k => k.startsWith(r.slug + '::'))
+    if (r.slug && !redeemBySlug[r.slug]) redeemBySlug[r.slug] = r
+  }
+
+  const openSlugs = new Set(positions.map(p => p.slug))
+
+  const closed: ClosedTrade[] = []
+  const allSlugs = Array.from(new Set([...Object.keys(bySlug), ...Object.keys(redeemBySlug)]))
+
+  for (const slug of allSlugs) {
+    if (openSlugs.has(slug)) continue
+
+    const d = bySlug[slug]
+    const r = redeemBySlug[slug]
+
+    const totalIn  = d?.totalIn  ?? 0
+    const totalOut = (d?.totalOut ?? 0) + (r?.usdcSize ?? 0)
+
+    if (totalIn < 1) continue   // no tracked buys — position opened before our history window
+
+    const profit = totalOut - totalIn
+    const roi    = totalIn > 0 ? profit / totalIn : 0
+
+    const avgBuyPrice  = d && d.totalIn  > 0 ? d.buyWtSum  / d.totalIn  : 0
+    const avgSellPrice = r ? 1.0 : d && d.totalOut > 0 ? d.sellWtSum / d.totalOut : 0
+
+    const exitType: ClosedTrade['exitType'] =
+      r                               ? 'redeem'  :
+      d && d.totalOut > 0             ? 'sell'    : 'expired'
+
     closed.push({
-      slug:      r.slug,
-      title:     r.title || meta[metaKey ?? '']?.title || '',
-      icon:      meta[metaKey ?? '']?.icon ?? null,
-      outcome:   meta[metaKey ?? '']?.outcome ?? 'YES',
+      slug,
+      title:     d?.title    || r?.title || '',
+      icon:      d?.icon     ?? null,
+      outcome:   d?.outcome  ?? '',
       buyPrice:  avgBuyPrice,
-      sellPrice: 1.0,
-      profit:    (1.0 - avgBuyPrice) / avgBuyPrice * totalBuyUsdc,
-      roi:       (1.0 - avgBuyPrice) / avgBuyPrice,
+      sellPrice: avgSellPrice,
+      profit,
+      roi,
+      exitType,
     })
   }
 
