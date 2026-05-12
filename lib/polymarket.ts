@@ -271,7 +271,7 @@ export async function getActivityForBot(wallet: string): Promise<Activity[]> {
 
 // Redeem events: market resolutions where this trader held the winning side.
 // Each REDEEM means they won — sellPrice is always $1.00/share.
-interface Redeem {
+export interface Redeem {
   proxyWallet: string
   slug:        string
   title:       string
@@ -479,6 +479,90 @@ export function computeSharpScore(
 
   const total = entryTiming + contrarianAccuracy + repeatability + stakeSizing
   return { total, entryTiming, contrarianAccuracy, repeatability, stakeSizing, resolvedCount: trips.length, winRate }
+}
+
+// ── Closed wins ───────────────────────────────────────────────────────────────
+
+export interface ClosedWin {
+  slug:      string
+  title:     string
+  icon:      string | null
+  outcome:   string
+  buyPrice:  number
+  sellPrice: number
+  profit:    number   // USDC gain
+  roi:       number   // fractional return, e.g. 2.5 = 250%
+}
+
+/** Match BUY→SELL and BUY→REDEEM round-trips, return top N profitable ones by USDC profit. */
+export function buildClosedWins(trades: Activity[], redeems: Redeem[] = [], topN = 5): ClosedWin[] {
+  const sorted = [...trades].sort((a, b) => a.timestamp - b.timestamp)
+
+  // icon/outcome lookup keyed by slug::outcome
+  const meta: Record<string, { title: string; icon: string | null; outcome: string }> = {}
+  for (const t of sorted) {
+    const k = `${t.slug}::${t.outcome}`
+    if (t.slug && !meta[k]) meta[k] = { title: t.title, icon: t.icon, outcome: t.outcome }
+  }
+
+  const queues: Record<string, Array<{ price: number; usdc: number }>> = {}
+  const wins: ClosedWin[] = []
+
+  // BUY→SELL pairs
+  for (const t of sorted) {
+    if (t.price <= 0) continue
+    const key = `${t.slug}::${t.outcome}`
+    if (t.side === 'BUY') {
+      if (!queues[key]) queues[key] = []
+      queues[key].push({ price: t.price, usdc: t.usdcSize })
+    } else if (t.side === 'SELL' && queues[key]?.length) {
+      const buy = queues[key].shift()!
+      if (t.price > buy.price) {
+        wins.push({
+          slug:      t.slug,
+          title:     t.title,
+          icon:      t.icon,
+          outcome:   t.outcome,
+          buyPrice:  buy.price,
+          sellPrice: t.price,
+          profit:    (t.price - buy.price) / buy.price * buy.usdc,
+          roi:       (t.price - buy.price) / buy.price,
+        })
+      }
+    }
+  }
+
+  // BUY→REDEEM (market resolved YES for this trader)
+  const buysBySlug: Record<string, Array<{ price: number; usdc: number; timestamp: number }>> = {}
+  for (const t of sorted) {
+    if (t.side === 'BUY' && t.price > 0) {
+      if (!buysBySlug[t.slug]) buysBySlug[t.slug] = []
+      buysBySlug[t.slug].push({ price: t.price, usdc: t.usdcSize, timestamp: t.timestamp })
+    }
+  }
+
+  const redeemedSlugs = new Set<string>()
+  for (const r of redeems) {
+    if (!r.slug || redeemedSlugs.has(r.slug)) continue
+    const priorBuys = (buysBySlug[r.slug] ?? []).filter(b => b.timestamp < r.timestamp)
+    if (priorBuys.length === 0) continue
+    redeemedSlugs.add(r.slug)
+    const avgBuyPrice  = priorBuys.reduce((s, b) => s + b.price, 0) / priorBuys.length
+    const totalBuyUsdc = priorBuys.reduce((s, b) => s + b.usdc, 0)
+    const metaKey = Object.keys(meta).find(k => k.startsWith(r.slug + '::'))
+    wins.push({
+      slug:      r.slug,
+      title:     r.title || meta[metaKey ?? '']?.title || '',
+      icon:      meta[metaKey ?? '']?.icon ?? null,
+      outcome:   meta[metaKey ?? '']?.outcome ?? 'YES',
+      buyPrice:  avgBuyPrice,
+      sellPrice: 1.0,
+      profit:    (1.0 - avgBuyPrice) / avgBuyPrice * totalBuyUsdc,
+      roi:       (1.0 - avgBuyPrice) / avgBuyPrice,
+    })
+  }
+
+  return wins.sort((a, b) => b.profit - a.profit).slice(0, topN)
 }
 
 /** Lightweight homepage preview — positions-only scoring, no trade history fetch.

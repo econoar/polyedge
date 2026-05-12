@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { getProfile, getPositions, getActivity, getRedeems, computeSharpScore, displayName, fmt$, fmtPct } from '@/lib/polymarket'
+import { getProfile, getPositions, getActivity, getRedeems, computeSharpScore, buildClosedWins, displayName, fmt$, fmtPct } from '@/lib/polymarket'
 import { analyzeBotLikelihood } from '@/lib/botDetection'
 import { notFound } from 'next/navigation'
 import WatchButton from '@/app/components/WatchButton'
@@ -55,6 +55,7 @@ export default async function TraderPage({ params }: Props) {
 
   const sharp       = computeSharpScore(pos, act, rdm)
   const botAnalysis = analyzeBotLikelihood(act, p.profit, p.volume, pos)
+  const closedWins  = buildClosedWins(act, rdm, 5)
 
   // Position accuracy: % of open positions currently profitable
   const profitablePos = pos.filter(px => px.cashPnl > 0).length
@@ -137,6 +138,41 @@ export default async function TraderPage({ params }: Props) {
 
       {/* PnL chart */}
       <PnlChart wallet={wallet} />
+
+      {/* Biggest closed wins */}
+      {closedWins.length > 0 && (
+        <>
+          <div className="section-title" style={{ marginTop: '2rem' }}>Biggest closed wins</div>
+          <div className="pos-list" style={{ marginBottom: '2rem' }}>
+            {closedWins.map((w, i) => (
+              <a
+                key={i}
+                href={`https://polymarket.com/event/${w.slug}`}
+                target="_blank" rel="noopener noreferrer"
+                style={{ textDecoration: 'none' }}
+              >
+                <div className="pos-card">
+                  {w.icon ? (
+                    <img src={w.icon} alt="" className="pos-icon" />
+                  ) : (
+                    <div className="pos-icon-ph" />
+                  )}
+                  <div>
+                    <div className="pos-title">{w.title}</div>
+                    <div className="pos-meta">
+                      {w.outcome} · bought {(w.buyPrice * 100).toFixed(0)}¢ → {w.sellPrice === 1 ? 'resolved $1' : `sold ${(w.sellPrice * 100).toFixed(0)}¢`}
+                    </div>
+                  </div>
+                  <div className="pos-right">
+                    <div className="pos-pnl pos">+{fmt$(w.profit)}</div>
+                    <div className="pos-val">+{(w.roi * 100).toFixed(0)}% ROI</div>
+                  </div>
+                </div>
+              </a>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* Open positions */}
       <div className="section-title" style={{ marginTop: '2rem' }}>Open positions ({pos.length})</div>
