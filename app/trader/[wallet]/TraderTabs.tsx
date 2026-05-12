@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { type ClosedTrade, type Position, type Activity, fmt$ } from '@/lib/polymarket'
 
-type Tab = 'closed' | 'open' | 'recent'
+type Tab = 'wins' | 'losses' | 'open' | 'recent'
 
 function timeAgo(ts: number) {
   const diff = Date.now() / 1000 - ts
@@ -22,13 +22,19 @@ export default function TraderTabs({
   positions:    Position[]
   activity:     Activity[]
 }) {
-  const [tab, setTab] = useState<Tab>('closed')
+  const [tab, setTab] = useState<Tab>('wins')
+
+  const wins   = closedTrades.filter(t => t.profit >= 0)
+  const losses = closedTrades.filter(t => t.profit <  0)
 
   return (
     <div style={{ marginTop: '2rem' }}>
       <div className="tabs">
-        <button className={`tab ${tab === 'closed' ? 'active' : ''}`} onClick={() => setTab('closed')}>
-          Closed Trades{closedTrades.length > 0 ? ` (${closedTrades.length})` : ''}
+        <button className={`tab ${tab === 'wins' ? 'active' : ''}`} onClick={() => setTab('wins')}>
+          Closed Wins{wins.length > 0 ? ` (${wins.length})` : ''}
+        </button>
+        <button className={`tab ${tab === 'losses' ? 'active' : ''}`} onClick={() => setTab('losses')}>
+          Closed Losses{losses.length > 0 ? ` (${losses.length})` : ''}
         </button>
         <button className={`tab ${tab === 'open' ? 'active' : ''}`} onClick={() => setTab('open')}>
           Open Positions{positions.length > 0 ? ` (${positions.length})` : ''}
@@ -38,12 +44,13 @@ export default function TraderTabs({
         </button>
       </div>
 
-      {tab === 'closed' && (
-        closedTrades.length === 0 ? (
-          <p style={{ color: 'var(--muted)', fontSize: '13px' }}>No closed trades found in recent history.</p>
+      {(tab === 'wins' || tab === 'losses') && (() => {
+        const rows = tab === 'wins' ? wins : losses
+        return rows.length === 0 ? (
+          <p style={{ color: 'var(--muted)', fontSize: '13px' }}>No {tab === 'wins' ? 'winning' : 'losing'} closed trades found.</p>
         ) : (
           <div className="pos-list">
-            {closedTrades.map((w, i) => (
+            {rows.map((w, i) => (
               <a
                 key={i}
                 href={`https://polymarket.com/event/${w.slug}`}
@@ -71,7 +78,7 @@ export default function TraderTabs({
             ))}
           </div>
         )
-      )}
+      })()}
 
       {tab === 'open' && (
         positions.length === 0 ? (
