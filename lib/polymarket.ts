@@ -3,6 +3,8 @@
 
 import { analyzeBotLikelihood, type BotAnalysis } from './botDetection'
 import { cacheGet, cacheSet } from './cache'
+import { isWalletSynced, getActivityFromDb, getRedeemsFromDb } from './db/queries'
+import { hasDb } from './db/index'
 export type { BotAnalysis } from './botDetection'
 
 const GAMMA = 'https://gamma-api.polymarket.com'
@@ -282,8 +284,11 @@ export async function getActivityPaginated(wallet: string, maxTrades = 1000): Pr
   return all.sort((a, b) => b.timestamp - a.timestamp)
 }
 
-// Cached variant for profile pages — 1 hour TTL, falls back to live on cache miss.
+// DB-first, Redis-second, live API fallback.
 export async function getActivityCached(wallet: string): Promise<Activity[]> {
+  if (hasDb() && await isWalletSynced(wallet)) {
+    return getActivityFromDb(wallet)
+  }
   const key = `activity:v1:${wallet.toLowerCase()}`
   const hit = await cacheGet<Activity[]>(key)
   if (hit) return hit
@@ -532,8 +537,11 @@ export function computeSharpScore(
   return { total, entryTiming, contrarianAccuracy, repeatability, stakeSizing, resolvedCount: trips.length, winRate }
 }
 
-// Cached variant for profile pages — 1 hour TTL, falls back to live on cache miss.
+// DB-first, Redis-second, live API fallback.
 export async function getRedeemsCached(wallet: string): Promise<Redeem[]> {
+  if (hasDb() && await isWalletSynced(wallet)) {
+    return getRedeemsFromDb(wallet)
+  }
   const key = `redeems:v1:${wallet.toLowerCase()}`
   const hit = await cacheGet<Redeem[]>(key)
   if (hit) return hit

@@ -15,3 +15,6 @@ node_modules/
 *.tsbuildinfo
 .claude/
 .vercel
+
+# Drizzle generated migrations
+drizzle/

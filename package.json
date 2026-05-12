@@ -5,10 +5,17 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "db:push": "dotenv -e .env.local -- drizzle-kit push",
+    "db:studio": "dotenv -e .env.local -- drizzle-kit studio",
+    "sync": "dotenv -e .env.local -- tsx scripts/sync.ts",
+    "sync:discover": "dotenv -e .env.local -- tsx scripts/sync.ts --discover",
+    "sync:wallet": "dotenv -e .env.local -- tsx scripts/sync.ts --wallet"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.0.2",
     "@upstash/redis": "^1.38.0",
+    "drizzle-orm": "^0.38.0",
     "next": "14.2.3",
     "react": "^18",
     "react-dom": "^18"
@@ -17,6 +24,9 @@
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "dotenv-cli": "^8.0.0",
+    "drizzle-kit": "^0.29.0",
+    "tsx": "^4.19.0",
     "typescript": "^5"
   }
 }
