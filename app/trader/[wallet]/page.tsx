@@ -1,23 +1,16 @@
 import Link from 'next/link'
-import { getProfile, getPositions, getActivity, getRedeems, computeSharpScore, buildClosedWins, displayName, fmt$, fmtPct } from '@/lib/polymarket'
+import { getProfile, getPositions, getActivity, getRedeems, computeSharpScore, buildClosedTrades, displayName, fmt$, fmtPct } from '@/lib/polymarket'
 import { analyzeBotLikelihood } from '@/lib/botDetection'
 import { notFound } from 'next/navigation'
 import WatchButton from '@/app/components/WatchButton'
 import HumanBadge from '@/app/components/HumanBadge'
 import PnlChart from './PnlChart'
 import SharpBreakdown from './SharpBreakdown'
+import TraderTabs from './TraderTabs'
 
 export const revalidate = 60
 
 type Props = { params: { wallet: string } }
-
-function timeAgo(ts: number) {
-  const diff = Date.now() / 1000 - ts
-  if (diff < 60)    return `${Math.floor(diff)}s ago`
-  if (diff < 3600)  return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return `${Math.floor(diff / 86400)}d ago`
-}
 
 function tweetUrl(name: string, profit: number) {
   const dir  = profit >= 0 ? 'up' : 'down'
@@ -53,9 +46,9 @@ export default async function TraderPage({ params }: Props) {
   const rdm = redeems.status   === 'fulfilled' ? redeems.value   : []
   const name = displayName(p)
 
-  const sharp       = computeSharpScore(pos, act, rdm)
-  const botAnalysis = analyzeBotLikelihood(act, p.profit, p.volume, pos)
-  const closedWins  = buildClosedWins(act, rdm, 5)
+  const sharp        = computeSharpScore(pos, act, rdm)
+  const botAnalysis  = analyzeBotLikelihood(act, p.profit, p.volume, pos)
+  const closedTrades = buildClosedTrades(act, rdm)
 
   // Position accuracy: % of open positions currently profitable
   const profitablePos = pos.filter(px => px.cashPnl > 0).length
@@ -139,102 +132,7 @@ export default async function TraderPage({ params }: Props) {
       {/* PnL chart */}
       <PnlChart wallet={wallet} />
 
-      {/* Biggest closed wins */}
-      {closedWins.length > 0 && (
-        <>
-          <div className="section-title" style={{ marginTop: '2rem' }}>Biggest closed wins</div>
-          <div className="pos-list" style={{ marginBottom: '2rem' }}>
-            {closedWins.map((w, i) => (
-              <a
-                key={i}
-                href={`https://polymarket.com/event/${w.slug}`}
-                target="_blank" rel="noopener noreferrer"
-                style={{ textDecoration: 'none' }}
-              >
-                <div className="pos-card">
-                  {w.icon ? (
-                    <img src={w.icon} alt="" className="pos-icon" />
-                  ) : (
-                    <div className="pos-icon-ph" />
-                  )}
-                  <div>
-                    <div className="pos-title">{w.title}</div>
-                    <div className="pos-meta">
-                      {w.outcome} · bought {(w.buyPrice * 100).toFixed(0)}¢ → {w.sellPrice === 1 ? 'resolved $1' : `sold ${(w.sellPrice * 100).toFixed(0)}¢`}
-                    </div>
-                  </div>
-                  <div className="pos-right">
-                    <div className="pos-pnl pos">+{fmt$(w.profit)}</div>
-                    <div className="pos-val">+{(w.roi * 100).toFixed(0)}% ROI</div>
-                  </div>
-                </div>
-              </a>
-            ))}
-          </div>
-        </>
-      )}
-
-      {/* Open positions */}
-      <div className="section-title" style={{ marginTop: '2rem' }}>Open positions ({pos.length})</div>
-      {pos.length === 0 ? (
-        <p style={{ color: 'var(--muted)', fontSize: '13px', marginBottom: '2.5rem' }}>No open positions.</p>
-      ) : (
-        <div className="pos-list">
-          {pos.map((position, i) => (
-            <a
-              key={i}
-              href={`https://polymarket.com/event/${position.slug}`}
-              target="_blank" rel="noopener noreferrer"
-              style={{ textDecoration: 'none' }}
-            >
-              <div className="pos-card">
-                {position.icon ? (
-                  <img src={position.icon} alt="" className="pos-icon" />
-                ) : (
-                  <div className="pos-icon-ph" />
-                )}
-                <div>
-                  <div className="pos-title">{position.title}</div>
-                  <div className="pos-meta">
-                    {position.outcome} · avg {(position.avgPrice * 100).toFixed(0)}¢ → {(position.curPrice * 100).toFixed(0)}¢ now
-                  </div>
-                </div>
-                <div className="pos-right">
-                  <div className={`pos-pnl ${position.cashPnl >= 0 ? 'pos' : 'neg'}`}>
-                    {position.cashPnl >= 0 ? '+' : ''}{fmt$(position.cashPnl)}
-                  </div>
-                  <div className="pos-val">{fmt$(position.currentValue)} value</div>
-                </div>
-              </div>
-            </a>
-          ))}
-        </div>
-      )}
-
-      {/* Trade activity */}
-      <div className="section-title">Recent trades ({act.length})</div>
-      {act.length === 0 ? (
-        <p style={{ color: 'var(--muted)', fontSize: '13px' }}>No recent activity.</p>
-      ) : (
-        <div className="activity-list">
-          {act.map((a, i) => (
-            <div className="activity-row" key={i}>
-              <span className={`side-badge ${a.side === 'BUY' ? 'side-buy' : 'side-sell'}`}>
-                {a.side}
-              </span>
-              <div>
-                <div className="activity-title">{a.title}</div>
-                <div className="activity-outcome">{a.outcome}</div>
-              </div>
-              <div className="activity-size">
-                <div className="mono" style={{ fontSize: '12px' }}>{fmt$(a.usdcSize || a.size * a.price)}</div>
-                <div style={{ fontSize: '10px', color: 'var(--muted)', fontFamily: 'var(--font-mono)' }}>@ {(a.price * 100).toFixed(0)}¢</div>
-              </div>
-              <div className="activity-time">{timeAgo(a.timestamp)}</div>
-            </div>
-          ))}
-        </div>
-      )}
+      <TraderTabs closedTrades={closedTrades} positions={pos} activity={act} />
     </>
   )
 }

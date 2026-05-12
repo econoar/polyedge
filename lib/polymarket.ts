@@ -483,19 +483,19 @@ export function computeSharpScore(
 
 // ── Closed wins ───────────────────────────────────────────────────────────────
 
-export interface ClosedWin {
+export interface ClosedTrade {
   slug:      string
   title:     string
   icon:      string | null
   outcome:   string
   buyPrice:  number
   sellPrice: number
-  profit:    number   // USDC gain
-  roi:       number   // fractional return, e.g. 2.5 = 250%
+  profit:    number   // USDC gain (negative = loss)
+  roi:       number   // fractional return (negative = loss)
 }
 
-/** Match BUY→SELL and BUY→REDEEM round-trips, return top N profitable ones by USDC profit. */
-export function buildClosedWins(trades: Activity[], redeems: Redeem[] = [], topN = 5): ClosedWin[] {
+/** Match BUY→SELL and BUY→REDEEM round-trips, sorted by profit descending (wins first, losses last). */
+export function buildClosedTrades(trades: Activity[], redeems: Redeem[] = []): ClosedTrade[] {
   const sorted = [...trades].sort((a, b) => a.timestamp - b.timestamp)
 
   // icon/outcome lookup keyed by slug::outcome
@@ -506,9 +506,9 @@ export function buildClosedWins(trades: Activity[], redeems: Redeem[] = [], topN
   }
 
   const queues: Record<string, Array<{ price: number; usdc: number }>> = {}
-  const wins: ClosedWin[] = []
+  const closed: ClosedTrade[] = []
 
-  // BUY→SELL pairs
+  // BUY→SELL pairs (include wins and losses)
   for (const t of sorted) {
     if (t.price <= 0) continue
     const key = `${t.slug}::${t.outcome}`
@@ -517,22 +517,20 @@ export function buildClosedWins(trades: Activity[], redeems: Redeem[] = [], topN
       queues[key].push({ price: t.price, usdc: t.usdcSize })
     } else if (t.side === 'SELL' && queues[key]?.length) {
       const buy = queues[key].shift()!
-      if (t.price > buy.price) {
-        wins.push({
-          slug:      t.slug,
-          title:     t.title,
-          icon:      t.icon,
-          outcome:   t.outcome,
-          buyPrice:  buy.price,
-          sellPrice: t.price,
-          profit:    (t.price - buy.price) / buy.price * buy.usdc,
-          roi:       (t.price - buy.price) / buy.price,
-        })
-      }
+      closed.push({
+        slug:      t.slug,
+        title:     t.title,
+        icon:      t.icon,
+        outcome:   t.outcome,
+        buyPrice:  buy.price,
+        sellPrice: t.price,
+        profit:    (t.price - buy.price) / buy.price * buy.usdc,
+        roi:       (t.price - buy.price) / buy.price,
+      })
     }
   }
 
-  // BUY→REDEEM (market resolved YES for this trader)
+  // BUY→REDEEM (market resolved YES for this trader — always a win)
   const buysBySlug: Record<string, Array<{ price: number; usdc: number; timestamp: number }>> = {}
   for (const t of sorted) {
     if (t.side === 'BUY' && t.price > 0) {
@@ -550,7 +548,7 @@ export function buildClosedWins(trades: Activity[], redeems: Redeem[] = [], topN
     const avgBuyPrice  = priorBuys.reduce((s, b) => s + b.price, 0) / priorBuys.length
     const totalBuyUsdc = priorBuys.reduce((s, b) => s + b.usdc, 0)
     const metaKey = Object.keys(meta).find(k => k.startsWith(r.slug + '::'))
-    wins.push({
+    closed.push({
       slug:      r.slug,
       title:     r.title || meta[metaKey ?? '']?.title || '',
       icon:      meta[metaKey ?? '']?.icon ?? null,
@@ -562,7 +560,7 @@ export function buildClosedWins(trades: Activity[], redeems: Redeem[] = [], topN
     })
   }
 
-  return wins.sort((a, b) => b.profit - a.profit).slice(0, topN)
+  return closed.sort((a, b) => b.profit - a.profit)
 }
 
 /** Lightweight homepage preview — positions-only scoring, no trade history fetch.
