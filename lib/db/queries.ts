@@ -1,4 +1,4 @@
-import { eq, and, lt, isNull, or, desc, sql } from 'drizzle-orm'
+import { eq, and, lt, isNull, isNotNull, or, desc, count } from 'drizzle-orm'
 import { getDb } from './index'
 import { traders, activity as activityTable } from './schema'
 import type { Activity, Redeem } from '@/lib/polymarket'
@@ -164,15 +164,12 @@ export async function upsertActivityBatch(rows: ActivityRow[]) {
 
 export async function getTraderCount(): Promise<number> {
   const db = getDb()
-  const rows = await db.select({ c: sql<number>`count(*)` }).from(traders)
-  return Number(rows[0]?.c ?? 0)
+  const [row] = await db.select({ c: count() }).from(traders)
+  return row?.c ?? 0
 }
 
 export async function getSyncedCount(): Promise<number> {
   const db = getDb()
-  const rows = await db
-    .select({ c: sql<number>`count(*)` })
-    .from(traders)
-    .where(sql`synced_at IS NOT NULL`)
-  return Number(rows[0]?.c ?? 0)
+  const [row] = await db.select({ c: count() }).from(traders).where(isNotNull(traders.syncedAt))
+  return row?.c ?? 0
 }

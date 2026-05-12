@@ -13,7 +13,7 @@
     "sync:wallet": "dotenv -e .env.local -- tsx scripts/sync.ts --wallet"
   },
   "dependencies": {
-    "@neondatabase/serverless": "^1.0.2",
+    "@neondatabase/serverless": "^0.10.4",
     "@upstash/redis": "^1.38.0",
     "drizzle-orm": "^0.38.0",
     "next": "14.2.3",
