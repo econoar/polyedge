@@ -235,11 +235,12 @@ export async function getPositions(wallet: string): Promise<Position[]> {
 // Activity: DATA/activity
 // Fields: proxyWallet, side, title, slug, eventSlug, icon, outcome,
 //         size (shares), usdcSize (dollar value), price, timestamp, transactionHash, name, pseudonym, profileImage
-export async function getActivity(wallet: string, limit = 30): Promise<Activity[]> {
+export async function getActivity(wallet: string, limit = 30, offset = 0): Promise<Activity[]> {
   const params = new URLSearchParams({
-    user:  wallet,
-    limit: String(limit),
-    type:  'TRADE',
+    user:   wallet,
+    limit:  String(limit),
+    offset: String(offset),
+    type:   'TRADE',
   })
   const raw = await get<any[]>(`${DATA}/activity?${params}`)
   return raw.map(r => ({
@@ -258,6 +259,26 @@ export async function getActivity(wallet: string, limit = 30): Promise<Activity[
     pseudonym:       r.pseudonym      ?? null,
     profileImage:    r.profileImage   ?? null,
   }))
+}
+
+// Fetches up to maxTrades activity by paginating in parallel (100 per page).
+// Used on trader profile pages where completeness matters more than speed.
+export async function getActivityPaginated(wallet: string, maxTrades = 1000): Promise<Activity[]> {
+  const pageSize  = 100
+  const pageCount = Math.ceil(maxTrades / pageSize)
+  const pages = await Promise.allSettled(
+    Array.from({ length: pageCount }, (_, i) => getActivity(wallet, pageSize, i * pageSize))
+  )
+  const seen = new Set<string>()
+  const all: Activity[] = []
+  for (const page of pages) {
+    if (page.status !== 'fulfilled') continue
+    for (const a of page.value) {
+      const key = a.transactionHash || `${a.timestamp}-${a.slug}-${a.side}`
+      if (!seen.has(key)) { seen.add(key); all.push(a) }
+    }
+  }
+  return all.sort((a, b) => b.timestamp - a.timestamp)
 }
 
 // Fetches more trades for bot detection — silently returns [] on error.
@@ -279,12 +300,13 @@ export interface Redeem {
   timestamp:   number
 }
 
-export async function getRedeems(wallet: string, limit = 50): Promise<Redeem[]> {
+export async function getRedeems(wallet: string, limit = 50, offset = 0): Promise<Redeem[]> {
   try {
     const params = new URLSearchParams({
-      user:  wallet,
-      limit: String(limit),
-      type:  'REDEEM',
+      user:   wallet,
+      limit:  String(limit),
+      offset: String(offset),
+      type:   'REDEEM',
     })
     const raw = await get<any[]>(`${DATA}/activity?${params}`)
     return raw.map(r => ({
@@ -297,6 +319,24 @@ export async function getRedeems(wallet: string, limit = 50): Promise<Redeem[]> 
   } catch {
     return []
   }
+}
+
+// Fetches all redeems by paginating in parallel (100 per page).
+export async function getRedeemsPaginated(wallet: string, maxRedeems = 300): Promise<Redeem[]> {
+  const pageSize  = 100
+  const pageCount = Math.ceil(maxRedeems / pageSize)
+  const pages = await Promise.allSettled(
+    Array.from({ length: pageCount }, (_, i) => getRedeems(wallet, pageSize, i * pageSize))
+  )
+  const seen = new Set<string>()
+  const all: Redeem[] = []
+  for (const page of pages) {
+    if (page.status !== 'fulfilled') continue
+    for (const r of page.value) {
+      if (r.slug && !seen.has(r.slug)) { seen.add(r.slug); all.push(r) }
+    }
+  }
+  return all
 }
 
 // ── PnL history ──────────────────────────────────────────────────────────────
